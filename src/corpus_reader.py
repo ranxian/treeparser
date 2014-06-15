@@ -3,6 +3,8 @@ class CorpusReader:
         f = open(filename, 'r')
 
         self.sents = []
+        self.pos_set = []
+        self.token_set = []
         sent = []
 
         while True:
@@ -18,9 +20,16 @@ class CorpusReader:
             else:
                 sp = line.split('\t')
                 sp2 = [int(sp[0]), sp[1], sp[3], int(sp[8])]
+                self.token_set.append(sp[1])
+                self.pos_set.append(sp[3])
                 sent.append(sp2)
-
         f.close()
+        
+        print 'nSample: %d' % len(self.token_set)
+        self.token_set = set(self.token_set)
+        print 'Length of Vocabulary: %d' % len(self.token_set)
+        self.pos_set = set(self.pos_set)
+        print 'Length of Pos %d' % (len(self.pos_set))
         print len(self.sents)
 
 dev_data_path = '../data/dev.conll08'
