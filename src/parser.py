@@ -12,6 +12,8 @@ ACT_SHIFT   = 0
 ACT_LEFT    = 1
 ACT_RIGHT   = 2
 
+logfile = open('log.txt', 'w')
+
 class Node:
     def __init__(self, idx, token, pos):
         self.left = []
@@ -23,12 +25,17 @@ class Node:
     def __str__(self):
         return 'hello'
 
-    def printSelf(self, pidx):
+    def printSelf(self, outfile, pidx, isConll=False):
         for node in self.left:
-            node.printSelf(self.idx)
-        print '%5d%20s%20s%20s' % (self.idx, self.token, self.pos, str(pidx) if pidx >= 0 else '-')
+            node.printSelf(outfile, self.idx, isConll)
+
+        if isConll:
+            outfile.write(('%d\t%s\t%s\t%s\t%s\t_\t_\t_\t%d\tX\t_\n') % (self.idx, self.token, self.token, self.pos, self.pos, pidx))
+        else:
+            outfile.write('%5d%20s%20s%20s\n' % (self.idx, self.token, self.pos, str(pidx) if pidx >= 0 else '_'))    
+        
         for node in self.right:
-            node.printSelf(self.idx)
+            node.printSelf(outfile, self.idx, isConll)
 
 class Parser:
 
@@ -45,18 +52,11 @@ class Parser:
     def train(self, sents):
         # For each sentence, retrievel features
         for sent in sents:
-            nodes = []
             # Build a nodes array
-            nodes.append(self.START_NODE1)
-            nodes.append(self.START_NODE2)
-            for word in sent:
-                nodes.append(self._build_node(word))
-            nodes.append(self.END_NODE1)
-            nodes.append(self.END_NODE2)
+            nodes = self._init_nodes(sent)
             # Train
             no_construction = True
             i = 2
-            cnt = 0
             while len(nodes) > 5:
                 if i == len(nodes)-2:
                     if no_construction:
@@ -69,8 +69,6 @@ class Parser:
                     # Pred action
                     action = self._decide_action(sent, nodes, i)
                     # Apply action
-                    # action = 1+(cnt%2)
-                    # cnt += 1
                     i = self._construct(nodes, i, action)
                     
                     if action == ACT_LEFT or action == ACT_RIGHT:
@@ -86,12 +84,12 @@ class Parser:
                         self.svmLS.add_sample(features, -1)
                         self.svmRS.add_sample(features, -1)
                     else:
-                        raise BaseException, 'No a valid action'
+                        raise BaseException, 'Not a valid action'
             for node in nodes[2:-2]:
-                node.printSelf(0)
-            print
-            for word in sent:
-                print '%5d%20s%20s%20d' % tuple(word)
+                node.printSelf(logfile, 0, isConll=True)
+            logfile.write('\n')
+            # for word in sent:
+            #     logfile.write('%5d%20s%20s%20d\n' % tuple(word))
         self.svmLR.train()
         self.svmRS.train()
         self.svmLS.train()
@@ -102,7 +100,32 @@ class Parser:
         if output:
             outfile = open(self.result_path, 'w')
 
-        if output != None:
+        for sent in sents:
+            nodes = self._init_nodes(sent)
+            no_construction = True
+            i = 2
+            while len(nodes) > 5:
+                if i == len(nodes)-2:
+                    if no_construction:
+                        break
+                    no_construction = True
+                    i = 2
+                else:
+                    # Gain feature
+                    features = self._get_features(nodes, i)
+                    # Pred action
+                    action = self._pred_action(features)
+                    # Apply action
+                    i = self._construct(nodes, i, action)
+                    
+                    if action == ACT_LEFT or action == ACT_RIGHT:
+                        no_construction = False
+            if output:
+                for node in nodes[2:-2]:
+                    node.printSelf(outfile, 0, isConll=True)
+                outfile.write('\n')
+
+        if output:
             outfile.close()
 
     def _build_node(self, word):
@@ -118,7 +141,7 @@ class Parser:
         nodej = nodes[i+1]
         action = ACT_SHIFT
         # See if i->j (Right)
-        if sent[nodei.idx-1][IDX_HEAD] == nodej.idx:
+        if nodei.idx > 0 and sent[nodei.idx-1][IDX_HEAD] == nodej.idx:
             # Check no other node is nodei's child
             complete = True
             for node in nodes[2:-2]:
@@ -127,7 +150,7 @@ class Parser:
                     break
             if complete:
                 action = ACT_RIGHT
-        elif sent[nodej.idx-1][IDX_HEAD] == nodei.idx:
+        elif nodej.idx > 0 and sent[nodej.idx-1][IDX_HEAD] == nodei.idx:
             # Check no other node is nodej's child
             complete = True
             for node in nodes[2:-2]:
@@ -139,6 +162,9 @@ class Parser:
 
         # print 'action is %d' % action
         return action
+
+    def _pred_action(self, features):
+        return ACT_LEFT
 
     def _construct(self, nodes, i, action):
         nodei = nodes[i]
@@ -155,6 +181,18 @@ class Parser:
             raise BaseException, 'Not a valid action'
 
         return i
+
+    def _init_nodes(self, sent):
+        nodes = []
+        # Build a nodes array
+        nodes.append(self.START_NODE1)
+        nodes.append(self.START_NODE2)
+        for word in sent:
+            nodes.append(self._build_node(word))
+        nodes.append(self.END_NODE1)
+        nodes.append(self.END_NODE2)
+
+        return nodes
         
 
 def eval(goldpath, predictpath):
@@ -163,9 +201,10 @@ def eval(goldpath, predictpath):
 
 parser = Parser()
 # Train
-parser.train(reader.dev_reader.sents[0:1])
+parser.train(reader.dev_reader.sents[0:])
 # Predict
-parser.predict(reader.dev_reader.sents[0:1], True)
+parser.predict(reader.dev_reader.sents[0:], True)
 # Eval
 # eval('dev.conll08', 'predict.conll08')
 
+logfile.close()
