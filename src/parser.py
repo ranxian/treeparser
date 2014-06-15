@@ -61,15 +61,16 @@ class Parser:
                 if i == len(nodes)-2:
                     if no_construction:
                         break
+                    no_construction = True
                     i = 2
                 else:
                     # Gain feature
                     features = self._get_features(nodes, i)
                     # Pred action
-                    action = self._decide_action(nodes, i)
+                    action = self._decide_action(sent, nodes, i)
                     # Apply action
-                    action = 1+(cnt%2)
-                    cnt += 1
+                    # action = 1+(cnt%2)
+                    # cnt += 1
                     i = self._construct(nodes, i, action)
                     
                     if action == ACT_LEFT or action == ACT_RIGHT:
@@ -87,7 +88,10 @@ class Parser:
                     else:
                         raise BaseException, 'No a valid action'
             for node in nodes[2:-2]:
-                node.printSelf(-1)
+                node.printSelf(0)
+            print
+            for word in sent:
+                print '%5d%20s%20s%20d' % tuple(word)
         self.svmLR.train()
         self.svmRS.train()
         self.svmLS.train()
@@ -109,8 +113,32 @@ class Parser:
     def _get_features(self, nodes, i):
         pass
 
-    def _decide_action(self, nodes, i):
-        pass
+    def _decide_action(self, sent, nodes, i):
+        nodei = nodes[i]
+        nodej = nodes[i+1]
+        action = ACT_SHIFT
+        # See if i->j (Right)
+        if sent[nodei.idx-1][IDX_HEAD] == nodej.idx:
+            # Check no other node is nodei's child
+            complete = True
+            for node in nodes[2:-2]:
+                if sent[node.idx-1][IDX_HEAD] == nodei.idx:
+                    complete = False
+                    break
+            if complete:
+                action = ACT_RIGHT
+        elif sent[nodej.idx-1][IDX_HEAD] == nodei.idx:
+            # Check no other node is nodej's child
+            complete = True
+            for node in nodes[2:-2]:
+                if sent[node.idx-1][IDX_HEAD] == nodej.idx:
+                    complete = False
+                    break
+            if complete:
+                action = ACT_LEFT
+
+        # print 'action is %d' % action
+        return action
 
     def _construct(self, nodes, i, action):
         nodei = nodes[i]

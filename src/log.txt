@@ -1,0 +1,81 @@
+1913
+3454
+action is 2
+action is 1
+action is 0
+action is 2
+action is 2
+action is 0
+action is 0
+action is 0
+action is 0
+action is 2
+action is 0
+action is 0
+action is 0
+action is 2
+action is 0
+action is 1
+action is 0
+action is 0
+action is 1
+action is 1
+action is 2
+action is 0
+action is 1
+action is 0
+action is 0
+action is 2
+action is 0
+action is 0
+action is 0
+action is 0
+action is 0
+action is 1
+action is 0
+action is 0
+action is 0
+action is 0
+action is 1
+action is 1
+action is 0
+action is 0
+action is 1
+action is 1
+    1              Pierre                 NNP                   2
+    2              Vinken                 NNP                   8
+    3                   ,                   ,                   2
+    4                  61                  CD                   5
+    5               years                 NNS                   6
+    6                 old                  JJ                   2
+    7                   ,                   ,                   2
+    8                will                  MD                   0
+    9                join                  VB                   8
+   10                 the                  DT                  11
+   11               board                  NN                   9
+   12                  as                  IN                   9
+   14        nonexecutive                  JJ                  15
+   13                   a                  DT                  15
+   15            director                  NN                  12
+   16                Nov.                 NNP                   9
+   17                  29                  CD                  16
+   18                   .                   .                   8
+
+    1              Pierre                 NNP                   2
+    2              Vinken                 NNP                   8
+    3                   ,                   ,                   2
+    4                  61                  CD                   5
+    5               years                 NNS                   6
+    6                 old                  JJ                   2
+    7                   ,                   ,                   2
+    8                will                  MD                   0
+    9                join                  VB                   8
+   10                 the                  DT                  11
+   11               board                  NN                   9
+   12                  as                  IN                   9
+   13                   a                  DT                  15
+   14        nonexecutive                  JJ                  15
+   15            director                  NN                  12
+   16                Nov.                 NNP                   9
+   17                  29                  CD                  16
+   18                   .                   .                   8
