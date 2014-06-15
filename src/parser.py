@@ -22,9 +22,6 @@ class Node:
         self.token = token
         self.pos = pos
 
-    def __str__(self):
-        return 'hello'
-
     def printSelf(self, outfile, pidx, isConll=False):
         for node in self.left:
             node.printSelf(outfile, self.idx, isConll)
@@ -86,11 +83,6 @@ class Parser:
                         self.svmRS.add_sample(features, -1)
                     else:
                         raise BaseException, 'Not a valid action'
-            for node in nodes[2:-2]:
-                node.printSelf(logfile, 0, isConll=True)
-            logfile.write('\n')
-            # for word in sent:
-            #     logfile.write('%5d%20s%20s%20d\n' % tuple(word))
         self.svmLR.train()
         self.svmRS.train()
         self.svmLS.train()
@@ -135,7 +127,25 @@ class Parser:
         return node
 
     def _get_features(self, nodes, i):
-        pass
+        features = []
+        def add_feature(position, name, value):
+            feat = position + ':' + name + ':' + value
+            featidx = self.feature_map.get(feat)
+            if featidx != None:
+                features.append(featidx)
+
+        window_names = ['-2', '-1', '0-', '0+', '1', '2', '3', '4']
+        idx = 0
+        for node in nodes[i-2:i+5]:
+            position = window_names[idx]
+            add_feature(position, 'pos', node.pos)
+            add_feature(position, 'lex', node.token)
+            if len(node.left) > 0:
+                add_feature(position, 'chLlex', node.left[0].token)
+            if len(node.right) > 0:
+                add_feature(position, 'chRlex', node.right[0].token)
+
+        return features
 
     def _decide_action(self, sent, nodes, i):
         nodei = nodes[i]
