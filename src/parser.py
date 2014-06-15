@@ -42,9 +42,10 @@ class Parser:
         self.svmLS = SVM()
         self.svmRS = SVM()
         self.svmLR = SVM()
+        self.svm = SVM()
 
     def train(self, reader):
-        sents = reader.sents[0:1]
+        sents = reader.sents[0:10]
         self.token_set = reader.token_set
         self.pos_set = reader.pos_set
         self._init_feature_map()
@@ -83,9 +84,16 @@ class Parser:
                         self.svmRS.add_sample(features, -1)
                     else:
                         raise BaseException, 'Not a valid action'
+                    self.svm.add_sample(features, action)
+        print 'Training SVM1'
         self.svmLR.train()
+        print 'Training SVM2'
         self.svmRS.train()
+        print 'Training SVM3'
         self.svmLS.train()
+        print 'Training SVM4'
+        self.svm.train()
+        print 'Trained'
 
     def predict(self, sents, output=False):
         # fd for output file
@@ -178,7 +186,48 @@ class Parser:
         return action
 
     def _pred_action(self, features):
-        return ACT_LEFT
+        action, error = self.svm.predict(features)
+        # print action
+        return action
+
+        lr, error1 = self.svmLR.predict(features)
+        ls, error2 = self.svmLS.predict(features)
+        rs, error3 = self.svmRS.predict(features)
+        print lr, error1
+        print ls, error2
+        print rs, error3
+        action = None
+        error = None
+
+        if error1 < error2:
+            if error1 < error3:
+                # error1 is the biggest
+                if lr > 0:
+                    action, error = ACT_LEFT, error1
+                else:
+                    action, error = ACT_RIGHT, error1
+            else:
+                # error3 is the biggest
+                if rs > 0:
+                    action, error = ACT_RIGHT, error3
+                else:
+                    action, error = ACT_SHIFT, error3
+        else:
+            if error2 < error3:
+                # error2 is the biggest
+                if ls > 0:
+                    action, error = ACT_LEFT, error2
+                else:
+                    action, error = ACT_SHIFT, error2
+            else:
+                # error3 is the biggest
+                if rs > 0:
+                    action, error = ACT_RIGHT, error3
+                else:
+                    action, error = ACT_SHIFT, error3
+
+        print 'action is %d, error is %f' % (action, error)
+        return action
 
     def _construct(self, nodes, i, action):
         nodei = nodes[i]
