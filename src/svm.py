@@ -8,7 +8,7 @@ class SVM:
     def __init__(self):
         pass
 
-    def add_sample(self):
+    def add_sample(self, x, y):
         pass
 
     def train(self):

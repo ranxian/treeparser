@@ -37,11 +37,12 @@ Train and Development Data
         column 12+: graph dependents, each column for one head in column 11.
         
 Example for .conll08 format:
-1	Ms.	Ms.	NNP	NNP	_	_	_	2	X	Ms.	_	_
-2	Haag	Haag	NNP	NNP	_	_	_	3	X	_	X	X
+1   2       3       4   5   6   7   8   9   10  11      12  13
+1	Ms.	    Ms.	    NNP	NNP	_	_	_	2	X	Ms.	    _	_
+2	Haag	Haag	NNP	NNP	_	_	_	3	X	_	    X	X
 3	plays	plays	VBZ	VBZ	_	_	_	0	X	plays	_	_
-4	Elianti	Elianti	NNP	NNP	_	_	_	3	X	_	_	X
-5	.	.	.	.	_	_	_	3	X	_	_	_
+4	Elianti	Elianti	NNP	NNP	_	_	_	3	X	_	    _	X
+5	.	    .	    .	.	_	_	_	3	X	_	    _	_
     In the above sentence, there are 5 tokens.
     The tree on the sentence is given by column 9 and column 10.
     The column 9 and column 10 of line 1 indicates that the head of 'Ms.' is

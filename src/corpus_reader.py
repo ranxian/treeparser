@@ -17,9 +17,7 @@ class CorpusReader:
                 sent = []
             else:
                 sp = line.split('\t')
-                sp2 = [int(sp[0]), sp[1], sp[3]]
-                for t in sp[5:]:
-                    sp2.append(t)
+                sp2 = [int(sp[0]), sp[1], sp[3], int(sp[8])]
                 sent.append(sp2)
 
         f.close()
