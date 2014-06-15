@@ -44,7 +44,7 @@ class Parser:
         self.svmLR = SVM()
 
     def train(self, reader):
-        sents = reader.sents
+        sents = reader.sents[0:1]
         self.token_set = reader.token_set
         self.pos_set = reader.pos_set
         self._init_feature_map()
@@ -133,6 +133,8 @@ class Parser:
             featidx = self.feature_map.get(feat)
             if featidx != None:
                 features.append(featidx)
+            else:
+                print 'ignore ' + feat
 
         window_names = ['-2', '-1', '0-', '0+', '1', '2', '3', '4']
         idx = 0
@@ -144,6 +146,7 @@ class Parser:
                 add_feature(position, 'chLlex', node.left[0].token)
             if len(node.right) > 0:
                 add_feature(position, 'chRlex', node.right[0].token)
+            idx += 1
 
         return features
 
@@ -220,6 +223,8 @@ class Parser:
 
     def _init_feature_map(self):
         # -2:pos:NN => 0
+        self.token_set += ['START1', 'START2', 'END1', 'END2', 'END3', 'END4']
+        self.pos_set += ['START1_POS', 'START2_POS', 'END1_POS', 'END2_POS', 'END3_POS', 'END4_POS']
         window_names = ['-2', '-1', '0-', '0+', '1', '2', '3', '4']
         feat_names = ['pos', 'lex', 'chLlex', 'chRlex']
         self.feature_map = {}
@@ -249,7 +254,7 @@ parser = Parser()
 # Train
 parser.train(reader.dev_reader)
 # Predict
-parser.predict(reader.dev_reader.sents[0:], True)
+parser.predict(reader.dev_reader.sents[0:1], True)
 # Eval
 # eval('dev.conll08', 'predict.conll08')
 

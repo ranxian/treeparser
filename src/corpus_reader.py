@@ -26,9 +26,9 @@ class CorpusReader:
         f.close()
         
         print 'nSample: %d' % len(self.token_set)
-        self.token_set = set(self.token_set)
+        self.token_set = list(set(self.token_set))
         print 'Length of Vocabulary: %d' % len(self.token_set)
-        self.pos_set = set(self.pos_set)
+        self.pos_set = list(set(self.pos_set))
         print 'Length of Pos %d' % (len(self.pos_set))
         print len(self.sents)
 
