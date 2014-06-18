@@ -3,6 +3,7 @@ import sys;
 sys.path.append('../liblinear-1.94/python')
 import liblinear as ll
 import liblinearutil as llu
+import os.path
 
 class SVM:
     def __init__(self):
@@ -16,7 +17,11 @@ class SVM:
         self.ys.append(y)
 
     def train(self):
-        self.model = llu.train(self.ys, self.xs, self.train_param)
+        if os.path.isfile('svm.model'):
+            self.model = llu.load_model('svm.model')
+        else:
+            self.model = llu.train(self.ys, self.xs, self.train_param)
+            llu.save_model('svm.model', self.model)
 
     def predict(self, features):
         x = {}
@@ -29,5 +34,5 @@ class SVM:
         self.xs = []
         self.ys = []
         self.model = None
-        self.train_param = '-s 0 -c 4 -B 1 -e 1'
+        self.train_param = '-s 4 -B 1 -e 0.001 -q'
         self.pred_param = '-q'

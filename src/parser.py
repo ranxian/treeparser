@@ -84,6 +84,7 @@ class Parser:
                         self.svmRS.add_sample(features, -1)
                     else:
                         raise BaseException, 'Not a valid action'
+                    print action
                     self.svm.add_sample(features, action)
         print 'Training SVM1'
         self.svmLR.train()
@@ -187,7 +188,7 @@ class Parser:
 
     def _pred_action(self, features):
         action, error = self.svm.predict(features)
-        # print action
+        print action
         return action
 
         lr, error1 = self.svmLR.predict(features)
