@@ -34,5 +34,5 @@ class SVM:
         self.xs = []
         self.ys = []
         self.model = None
-        self.train_param = '-s 4 -B 1 -e 0.001 -q'
+        self.train_param = '-s 4 -B 1 -e 0.1 -q'
         self.pred_param = '-q'
