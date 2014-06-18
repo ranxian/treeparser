@@ -6,7 +6,8 @@ import liblinearutil as llu
 import os.path
 
 class SVM:
-    def __init__(self):
+    def __init__(self, useModel=True):
+        self.useModel = useModel
         self.reset()
 
     def add_sample(self, x, y):
@@ -17,7 +18,7 @@ class SVM:
         self.ys.append(y)
 
     def train(self):
-        if os.path.isfile('svm.model'):
+        if os.path.isfile('svm.model') and self.useModel:
             self.model = llu.load_model('svm.model')
         else:
             self.model = llu.train(self.ys, self.xs, self.train_param)
@@ -34,5 +35,5 @@ class SVM:
         self.xs = []
         self.ys = []
         self.model = None
-        self.train_param = '-s 4 -B 1 -e 0.1 -q'
+        self.train_param = '-s 4 -B 1 -e 0.01 -q -c 0.1'
         self.pred_param = '-q'

@@ -1,6 +1,7 @@
 from __future__ import division
 import corpus_reader as reader
 import os
+import sys
 from svm import SVM
 import time
 
@@ -37,14 +38,14 @@ class Node:
             node.printSelf(outfile, self.idx, isConll)
 
 class Parser:
-    def __init__(self):
+    def __init__(self, lw, rw, useModel=False):
         self.result_path = '../result/predict.conll08'
         self.token_set = []
         self.pos_set = []
-        self.svm = SVM()
+        self.svm = SVM(useModel)
 
-        self.lw = 2
-        self.rw = 4
+        self.lw = lw
+        self.rw = rw
         self.window_names = []
         self.slnodes = []
         self.srnodes = []
@@ -52,17 +53,27 @@ class Parser:
         for i in range(-self.lw, 0):
             absi = abs(i)
             self.window_names.append(str(i))
-            self.slnodes.append(Node(i-100, 'START' + str(absi), 'START_POS' + str(absi)))
+            token = 'START' + str(absi)
+            pos = 'START_POS' + str(absi)
+            self.slnodes.append(Node(i-100, token, pos))
+            self.token_set.append(token)
+            self.pos_set.append(pos)
+
         self.window_names.append('0-')
         self.window_names.append('0+')
+
         for i in range(1, self.rw+1):
             self.window_names.append(str(i))
-            self.srnodes.append(Node(-i, 'END'+str(i), 'END_POS' + str(i)))
+            token = 'END'+str(i)
+            pos = 'END_POS' + str(i)
+            self.srnodes.append(Node(-i, token, pos))
+            self.token_set.append(token)
+            self.pos_set.append(pos)
 
     def train(self, reader):
         sents = reader.sents[0:]
-        self.token_set = reader.token_set
-        self.pos_set = reader.pos_set
+        self.token_set += reader.token_set
+        self.pos_set += reader.pos_set
         self._init_feature_map()
         # For each sentence, retrievel features
         start = time.clock()
@@ -71,13 +82,13 @@ class Parser:
             nodes = self._init_nodes(sent)
             # Train
             no_construction = True
-            i = 2
-            while len(nodes) > 7:
-                if i == len(nodes)-4:
+            i = self.lw
+            while len(nodes) > (1+self.rw+self.lw):
+                if i == len(nodes)-self.rw:
                     if no_construction:
                         break
                     no_construction = True
-                    i = 2
+                    i = self.lw
                 else:
                     # Gain feature
                     features = self._get_features(nodes, i)
@@ -110,25 +121,26 @@ class Parser:
             nodes = self._init_nodes(sent)
             nodes2 = [node for node in nodes]
             no_construction = True
-            i = 2
-            while len(nodes) > 7:
-                if i == len(nodes)-4:
+            i = self.lw
+            while len(nodes) > (1+self.lw+self.rw):
+                if i == len(nodes)-self.rw:
                     if no_construction:
                         break
                     no_construction = True
-                    i = 2
+                    i = self.lw
                 else:
                     # Gain feature
                     features = self._get_features(nodes, i)
                     # Pred action
                     action = self.svm.predict(features)[0]
+                    # print 'segv?'
                     # Apply action
                     i = self._construct(nodes, i, action)
                     
                     if action == ACT_LEFT or action == ACT_RIGHT:
                         no_construction = False
             if output:
-                for node in nodes2[2:-4]:
+                for node in nodes2[self.lw:-self.rw]:
                     outfile.write('%d\t%s\t%s\t%s\t%s\t_\t_\t_\t%d\tX\t_\n' % (node.idx, node.token, node.token, 
                                                                        node.pos, node.pos, node.pidx if node.pidx != None else 0))
                 outfile.write('\n')
@@ -152,16 +164,15 @@ class Parser:
             else:
                 pass
 
-        window_names = ['-2', '-1', '0-', '0+', '1', '2', '3', '4']
         idx = 0
-        for node in nodes[i-2:i+5]:
-            position = window_names[idx]
+        for node in nodes[i-self.lw:i+(self.rw+2)]:
+            position = self.window_names[idx]
             add_feature(position, 'pos', node.pos)
             add_feature(position, 'lex', node.token)
             if len(node.left) > 0:
                 add_feature(position, 'chLlex', node.left[0].token)
             if len(node.right) > 0:
-                add_feature(position, 'chRlex', node.right[0].token)
+                add_feature(position, 'chRlex', node.right[-1].token)
             idx += 1
 
         return features
@@ -174,7 +185,7 @@ class Parser:
         if nodei.idx > 0 and sent[nodei.idx-1][IDX_HEAD] == nodej.idx:
             # Check no other node is nodei's child
             complete = True
-            for node in nodes[2:-4]:
+            for node in nodes[self.lw:-self.rw]:
                 if sent[node.idx-1][IDX_HEAD] == nodei.idx:
                     complete = False
                     break
@@ -183,7 +194,7 @@ class Parser:
         elif nodej.idx > 0 and sent[nodej.idx-1][IDX_HEAD] == nodei.idx:
             # Check no other node is nodej's child
             complete = True
-            for node in nodes[2:-4]:
+            for node in nodes[self.lw:-self.rw]:
                 if sent[node.idx-1][IDX_HEAD] == nodej.idx:
                     complete = False
                     break
@@ -212,40 +223,24 @@ class Parser:
         return i
 
     def _init_nodes(self, sent):
-        # self.START_NODE4 = Node(-1, 'START4', 'START4_POS')
-        # self.START_NODE3 = Node(-2, 'START3', 'START3_POS')
-        self.START_NODE2 = Node(-3, 'START2', 'START2_POS')
-        self.START_NODE1 = Node(-4, 'START1', 'START1_POS')
-        self.END_NODE1   = Node(-5, 'END1', 'END1_POS')
-        self.END_NODE2   = Node(-6, 'END2', 'END2_POS')
-        self.END_NODE3   = Node(-7, 'END3', 'END3_POS')
-        self.END_NODE4   = Node(-8, 'END4', 'END4_POS')
-
         nodes = []
         # Build a nodes array
-        # nodes.append(self.START_NODE4)
-        # nodes.append(self.START_NODE3)
-        nodes.append(self.START_NODE2)
-        nodes.append(self.START_NODE1)
+        for node in self.slnodes:
+            nodes.append(node)
         for word in sent:
             nodes.append(self._build_node(word))
-        nodes.append(self.END_NODE1)
-        nodes.append(self.END_NODE2)
-        nodes.append(self.END_NODE3)
-        nodes.append(self.END_NODE4)
+        for node in self.srnodes:
+            nodes.append(node)
 
         return nodes
 
     def _init_feature_map(self):
         # -2:pos:NN => 0
-        self.token_set += ['START1', 'START2', 'END1', 'END2', 'END3', 'END4']
-        self.pos_set += ['START1_POS', 'START2_POS', 'END1_POS', 'END2_POS', 'END3_POS', 'END4_POS']
-        window_names = ['-2', '-1', '0-', '0+', '1', '2', '3', '4']
         feat_names = ['pos', 'lex', 'chLlex', 'chRlex']
         self.feature_map = {}
 
         cnt = 0
-        for windname in window_names:
+        for windname in self.window_names:
             for featname in feat_names:
                 if featname.endswith('pos'):
                     for pos in self.pos_set:
@@ -258,19 +253,23 @@ class Parser:
                         self.feature_map[key] = cnt
                         cnt += 1
 
-        print len(self.feature_map)
+        print 'has', len(self.feature_map), 'features'
         
 
 def eval(goldpath, predictpath):
     # Evaluate
     os.system('java -jar ../conll08-eval.jar ../data/%s ../result/%s' % (goldpath, predictpath))
 
-parser = Parser()
+useModel = True
+if sys.argv[1] == '-1':
+    useModel = False
+
+parser = Parser(2, 4, useModel=useModel)
 # Train
 parser.train(reader.trn_reader)
 # Predict
 parser.predict(reader.dev_reader.sents[0:], True)
 # Eval
-# eval('dev.conll08', 'predict.conll08')
+eval('dev.conll08', 'predict.conll08')
 
 logfile.close()
