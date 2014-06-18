@@ -72,8 +72,8 @@ class Parser:
             # Train
             no_construction = True
             i = 2
-            while len(nodes) > 5:
-                if i == len(nodes)-2:
+            while len(nodes) > 7:
+                if i == len(nodes)-4:
                     if no_construction:
                         break
                     no_construction = True
