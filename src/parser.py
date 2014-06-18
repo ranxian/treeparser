@@ -171,8 +171,10 @@ class Parser:
             add_feature(position, 'lex', node.token)
             if len(node.left) > 0:
                 add_feature(position, 'chLlex', node.left[0].token)
+                add_feature(position, 'chLpos', node.left[0].pos)
             if len(node.right) > 0:
                 add_feature(position, 'chRlex', node.right[-1].token)
+                add_feature(position, 'chRpos', node.right[-1].pos)
             idx += 1
 
         return features
@@ -236,7 +238,7 @@ class Parser:
 
     def _init_feature_map(self):
         # -2:pos:NN => 0
-        feat_names = ['pos', 'lex', 'chLlex', 'chRlex']
+        feat_names = ['pos', 'lex', 'chLlex', 'chRlex', 'chLpos', 'chRpos']
         self.feature_map = {}
 
         cnt = 0
