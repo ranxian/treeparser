@@ -2,6 +2,7 @@ from __future__ import division
 import corpus_reader as reader
 import os
 from svm import SVM
+import time
 
 IDX_IDX     = 0
 IDX_TOKEN   = 1
@@ -21,6 +22,7 @@ class Node:
         self.idx = idx
         self.token = token
         self.pos = pos
+        self.pidx = None
 
     def printSelf(self, outfile, pidx, isConll=False):
         for node in self.left:
@@ -45,11 +47,12 @@ class Parser:
         self.svm = SVM()
 
     def train(self, reader):
-        sents = reader.sents[0:10]
+        sents = reader.sents[0:]
         self.token_set = reader.token_set
         self.pos_set = reader.pos_set
         self._init_feature_map()
         # For each sentence, retrievel features
+        start = time.clock()
         for sent in sents:
             # Build a nodes array
             nodes = self._init_nodes(sent)
@@ -72,38 +75,27 @@ class Parser:
                     
                     if action == ACT_LEFT or action == ACT_RIGHT:
                         no_construction = False
-                    # Add sample to svm    
-                    if action == ACT_LEFT:
-                        self.svmLR.add_sample(features, +1)
-                        self.svmLS.add_sample(features, +1)
-                    elif action == ACT_RIGHT:
-                        self.svmLR.add_sample(features, -1)
-                        self.svmRS.add_sample(features, +1)
-                    elif action == ACT_SHIFT:
-                        self.svmLS.add_sample(features, -1)
-                        self.svmRS.add_sample(features, -1)
-                    else:
+                    if action < 0:
                         raise BaseException, 'Not a valid action'
-                    print action
                     self.svm.add_sample(features, action)
-        print 'Training SVM1'
-        self.svmLR.train()
-        print 'Training SVM2'
-        self.svmRS.train()
-        print 'Training SVM3'
-        self.svmLS.train()
-        print 'Training SVM4'
+        elapsed = time.clock() - start
+        print 'features added (%.2f secs)' % elapsed
+        print 'Training SVM'
+        start = time.clock()
         self.svm.train()
-        print 'Trained'
+        elapsed = time.clock() - start
+        print 'Trained (%.2f secs)' % elapsed
 
     def predict(self, sents, output=False):
         # fd for output file
+        start = time.clock()
         outfile = None
         if output:
             outfile = open(self.result_path, 'w')
 
         for sent in sents:
             nodes = self._init_nodes(sent)
+            nodes2 = [node for node in nodes]
             no_construction = True
             i = 2
             while len(nodes) > 7:
@@ -123,12 +115,14 @@ class Parser:
                     if action == ACT_LEFT or action == ACT_RIGHT:
                         no_construction = False
             if output:
-                for node in nodes[2:-4]:
-                    node.printSelf(outfile, 0, isConll=True)
+                for node in nodes2[2:-4]:
+                    outfile.write('%d\t%s\t%s\t%s\t%s\t_\t_\t_\t%d\tX\t_\n' % (node.idx, node.token, node.token, 
+                                                                       node.pos, node.pos, node.pidx if node.pidx != None else 0))
                 outfile.write('\n')
 
         if output:
             outfile.close()
+        print 'predicted (%.2f secs)' % (time.clock() - start)
 
     def _build_node(self, word):
         # Build node from a sentence in corpus
@@ -143,7 +137,7 @@ class Parser:
             if featidx != None:
                 features.append(featidx)
             else:
-                print 'ignore ' + feat
+                pass
 
         window_names = ['-2', '-1', '0-', '0+', '1', '2', '3', '4']
         idx = 0
@@ -188,7 +182,7 @@ class Parser:
 
     def _pred_action(self, features):
         action, error = self.svm.predict(features)
-        print action
+
         return action
 
         lr, error1 = self.svmLR.predict(features)
@@ -238,9 +232,11 @@ class Parser:
         elif action == ACT_LEFT:
             nodes.remove(nodej)
             nodei.right.append(nodej)
+            nodej.pidx = nodei.idx
         elif action == ACT_RIGHT:
             nodes.remove(nodei)
             nodej.left.append(nodei)
+            nodei.pidx = nodej.idx
         else:
             raise BaseException, 'Not a valid action'
 
@@ -302,9 +298,9 @@ def eval(goldpath, predictpath):
 
 parser = Parser()
 # Train
-parser.train(reader.dev_reader)
+parser.train(reader.trn_reader)
 # Predict
-parser.predict(reader.dev_reader.sents[0:1], True)
+parser.predict(reader.dev_reader.sents[0:], True)
 # Eval
 # eval('dev.conll08', 'predict.conll08')
 
