@@ -70,6 +70,9 @@ class Parser:
             self.token_set.append(token)
             self.pos_set.append(pos)
 
+        self.ignored_feature = 0
+        self.total_feature = 0
+
     def train(self, reader):
         sents = reader.sents[0:]
         self.token_set += reader.token_set
@@ -113,6 +116,7 @@ class Parser:
     def predict(self, sents, output=False):
         # fd for output file
         start = time.clock()
+        self.total_feature = 0
         outfile = None
         if output:
             outfile = open(self.result_path, 'w')
@@ -129,11 +133,9 @@ class Parser:
                     no_construction = True
                     i = self.lw
                 else:
-                    # Gain feature
+                    # Extract features
                     features = self._get_features(nodes, i)
-                    # Pred action
                     action = self.svm.predict(features)[0]
-                    # print 'segv?'
                     # Apply action
                     i = self._construct(nodes, i, action)
                     
@@ -147,22 +149,20 @@ class Parser:
 
         if output:
             outfile.close()
-        print 'predicted (%.2f secs)' % (time.clock() - start)
 
-    def _build_node(self, word):
-        # Build node from a sentence in corpus
-        node = Node(word[IDX_IDX], word[IDX_TOKEN], word[IDX_POS])
-        return node
+        print 'total feature %d, ignored %d, pctg %.2f%' % (self.total_feature, self.ignored_feature, self.ignored_feature / self.total_feature * 100)
+        print 'predicted (%.2f secs)' % (time.clock() - start)
 
     def _get_features(self, nodes, i):
         features = []
         def add_feature(position, name, value):
             feat = position + ':' + name + ':' + value
             featidx = self.feature_map.get(feat)
+            self.total_feature += 1
             if featidx != None:
                 features.append(featidx)
             else:
-                pass
+                self.ignored_feature += 1
 
         idx = 0
         for node in nodes[i-self.lw:i+(self.rw+2)]:
@@ -184,7 +184,7 @@ class Parser:
         nodej = nodes[i+1]
         action = ACT_SHIFT
         # See if i->j (Right)
-        if nodei.idx > 0 and sent[nodei.idx-1][IDX_HEAD] == nodej.idx:
+        if nodej.idx > 0 and sent[nodei.idx-1][IDX_HEAD] == nodej.idx:
             # Check no other node is nodei's child
             complete = True
             for node in nodes[self.lw:-self.rw]:
@@ -193,7 +193,8 @@ class Parser:
                     break
             if complete:
                 action = ACT_RIGHT
-        elif nodej.idx > 0 and sent[nodej.idx-1][IDX_HEAD] == nodei.idx:
+        elif nodei.idx > 0 and sent[nodej.idx-1][IDX_HEAD] == nodei.idx:
+            # See if j->i
             # Check no other node is nodej's child
             complete = True
             for node in nodes[self.lw:-self.rw]:
@@ -211,11 +212,11 @@ class Parser:
         nodej = nodes[i+1]
         if action == ACT_SHIFT:
             i += 1
-        elif action == ACT_LEFT:
+        elif action == ACT_LEFT: # j->i
             nodes.remove(nodej)
             nodei.right.append(nodej)
             nodej.pidx = nodei.idx
-        elif action == ACT_RIGHT:
+        elif action == ACT_RIGHT: # i->j
             nodes.remove(nodei)
             nodej.left.append(nodei)
             nodei.pidx = nodej.idx
@@ -230,7 +231,7 @@ class Parser:
         for node in self.slnodes:
             nodes.append(node)
         for word in sent:
-            nodes.append(self._build_node(word))
+            nodes.append(Node(word[IDX_IDX], word[IDX_TOKEN], word[IDX_POS]))
         for node in self.srnodes:
             nodes.append(node)
 
