@@ -25,12 +25,12 @@ class CorpusReader:
                 sent.append(sp2)
         f.close()
         
-        print 'nSample: %d' % len(self.token_set)
+        print 'nSample: %d' % len(self.token_set),
         self.token_set = list(set(self.token_set))
-        print 'Length of Vocabulary: %d' % len(self.token_set)
+        print 'Vocabulary: %d' % len(self.token_set),
         self.pos_set = list(set(self.pos_set))
-        print 'Length of Pos %d' % (len(self.pos_set))
-        print len(self.sents)
+        print 'Pos %d' % (len(self.pos_set)),
+        print 'Sents %d' % len(self.sents)
 
 dev_data_path = '../data/dev.conll08'
 trn_data_path = '../data/trn.conll08'

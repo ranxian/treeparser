@@ -2,8 +2,9 @@ from __future__ import division
 import corpus_reader as reader
 import os
 import sys
-from svm import SVM
+from perceptron import Perceptron
 import time
+from collections import defaultdict
 
 IDX_IDX     = 0
 IDX_TOKEN   = 1
@@ -28,21 +29,20 @@ class Node:
     def printSelf(self, outfile, pidx, isConll=False):
         for node in self.left:
             node.printSelf(outfile, self.idx, isConll)
-
-        if isConll:
-            outfile.write(('%d\t%s\t%s\t%s\t%s\t_\t_\t_\t%d\tX\t_\n') % (self.idx, self.token, self.token, self.pos, self.pos, pidx))
-        else:
-            outfile.write('%5d%20s%20s%20s\n' % (self.idx, self.token, self.pos, str(pidx) if pidx >= 0 else '_'))    
+        
+        outfile.write('%5d%20s%20s%20s\n' % (self.idx, self.token, self.pos, str(pidx) if pidx >= 0 else '_'))    
         
         for node in self.right:
             node.printSelf(outfile, self.idx, isConll)
 
 class Parser:
-    def __init__(self, lw, rw, useModel=False):
+    def __init__(self, lw, rw, iteration):
         self.result_path = '../result/predict.conll08'
         self.token_set = []
         self.pos_set = []
-        self.svm = SVM(useModel)
+        self.perceptron = Perceptron()
+        self.perceptron.tag_set = [ACT_SHIFT, ACT_LEFT, ACT_RIGHT]
+        self.iteration = iteration
 
         self.lw = lw
         self.rw = rw
@@ -70,53 +70,55 @@ class Parser:
             self.token_set.append(token)
             self.pos_set.append(pos)
 
-        self.ignored_feature = 0
-        self.total_feature = 0
-
     def train(self, reader):
         sents = reader.sents[0:]
         self.token_set += reader.token_set
         self.pos_set += reader.pos_set
-        self._init_feature_map()
         # For each sentence, retrievel features
         start = time.clock()
-        for sent in sents:
-            # Build a nodes array
-            nodes = self._init_nodes(sent)
-            # Train
-            no_construction = True
-            i = self.lw
-            while len(nodes) > (1+self.rw+self.lw):
-                if i == len(nodes)-self.rw:
-                    if no_construction:
-                        break
-                    no_construction = True
-                    i = self.lw
-                else:
-                    # Gain feature
-                    features = self._get_features(nodes, i)
-                    # Pred action
-                    action = self._decide_action(sent, nodes, i)
-                    # Apply action
-                    i = self._construct(nodes, i, action)
-                    
-                    if action == ACT_LEFT or action == ACT_RIGHT:
-                        no_construction = False
-                    if action < 0:
-                        raise BaseException, 'Not a valid action'
-                    self.svm.add_sample(features, action)
+        for it in range(self.iteration):
+            ntotal = 0
+            ncorrect = 0
+            for sent in sents:
+                # Build a nodes array
+                nodes = self._init_nodes(sent)
+                # Train
+                no_construction = True
+                i = self.lw
+
+                while len(nodes) > (1+self.rw+self.lw):
+                    if i == len(nodes)-self.rw:
+                        if no_construction:
+                            break
+                        no_construction = True
+                        i = self.lw
+                    else:
+                        # Gain feature
+                        features = self._get_features(nodes, i)
+                        # Pred action
+                        action = self._decide_action(sent, nodes, i)
+                        pred_action = self.perceptron.predict(features)
+                        self.perceptron.update(action, pred_action, features)
+
+                        ntotal += 1
+                        if pred_action == action:
+                            ncorrect += 1
+
+                        # Apply action
+                        i = self._construct(nodes, i, action)
+                        
+                        if action == ACT_LEFT or action == ACT_RIGHT:
+                            no_construction = False
+                        if action < 0:
+                            raise BaseException, 'Not a valid action'
+            print 'iter: #%d, precision: %.2f%% (%d/%d)' % (it, ncorrect/ntotal*100, ncorrect, ntotal)
+        self.perceptron.average_weights
         elapsed = time.clock() - start
-        print 'features added (%.2f secs)' % elapsed
-        print 'Training SVM'
-        start = time.clock()
-        self.svm.train()
-        elapsed = time.clock() - start
-        print 'Trained (%.2f secs)' % elapsed
+        print 'perceptron trained (%.2f secs)' % elapsed
 
     def predict(self, sents, output=False):
         # fd for output file
         start = time.clock()
-        self.total_feature = 0
         outfile = None
         if output:
             outfile = open(self.result_path, 'w')
@@ -135,7 +137,7 @@ class Parser:
                 else:
                     # Extract features
                     features = self._get_features(nodes, i)
-                    action = self.svm.predict(features)[0]
+                    action = self.perceptron.predict(features)
                     # Apply action
                     i = self._construct(nodes, i, action)
                     
@@ -150,33 +152,56 @@ class Parser:
         if output:
             outfile.close()
 
-        print 'total feature %d, ignored %d, pctg %.2f%%' % (self.total_feature, self.ignored_feature, self.ignored_feature / self.total_feature * 100)
         print 'predicted (%.2f secs)' % (time.clock() - start)
 
     def _get_features(self, nodes, i):
-        features = []
-        def add_feature(position, name, value):
-            feat = position + ':' + name + ':' + value
-            featidx = self.feature_map.get(feat)
-            self.total_feature += 1
-            if featidx != None:
-                features.append(featidx)
-            else:
-                self.ignored_feature += 1
+        def add(name, *args):
+            features['_'.join((name, ) + tuple(args))] = 1
 
-        idx = 0
-        for node in nodes[i-self.lw:i+(self.rw+2)]:
-            position = self.window_names[idx]
-            add_feature(position, 'pos', node.pos)
-            add_feature(position, 'lex', node.token)
-            add_feature(position, 'pl', node.pos + '-' + node.token)
-            if len(node.left) > 0:
-                add_feature(position, 'chLlex', node.left[0].token)
-                add_feature(position, 'chLpos', node.left[0].pos)
-            if len(node.right) > 0:
-                add_feature(position, 'chRlex', node.right[-1].token)
-                add_feature(position, 'chRpos', node.right[-1].pos)
-            idx += 1
+        features = defaultdict(int)
+
+        s0 = nodes[i]
+        n0 = nodes[i+1]
+        n1 = nodes[i+2]
+        n2 = nodes[i+3]
+
+        add('bias')
+        # feat_names = ['pos', 'lex', 'chLlex', 'chRlex', 'chLpos', 'chRpos', 'pl', '2pl']
+        # Unigram-like feature
+        add('0-:wp', s0.token, s0.pos)
+        add('0-:w', s0.token)
+        add('0-:p', s0.pos)
+        add('0+:wp', n0.token, n0.pos)
+        add('0+:w', n0.token, n0.pos)
+        add('0+:p', n0.token, n0.pos)
+        add('1:wp', n1.token, n1.pos)
+        add('1:w', n1.token)
+        add('1:p', n1.pos)
+        add('2:wp', n2.token, n2.pos)
+        add('2:w', n2.token)
+        add('2:p', n2.pos)
+        # Bigram-like feature
+        # S0wpN0wp; S0wpN0w; S0wN0wp; S0wpN0p; S0pN0wp; S0wN0w; S0pN0p
+        add('0-wp+0+:wp', s0.token, s0.pos, n0.token, n0.pos)
+        add('0-wp+0+:w', s0.token, s0.pos, n0.token)
+        add('0-w+0+:wp', s0.token, n0.token, n0.pos)
+        add('0-wp0+:p', s0.token, s0.pos, n0.pos)
+        add('0-p:0+wp', s0.pos, n0.token, n0.pos)
+        add('0-w:0+w', s0.token, n0.token)
+        add('0-p:0+p', s0.pos, n0.pos)
+        # Trigram-like feature
+        # N0pN1pN2p; S0pN0pN1p; S0pS0lpN0p; S0pS0rpN0p; S0pN0pN0lp
+        add('0+p:1p:2p', n0.pos, n1.pos, n2.pos)
+        add('0-p:0+p:1p', s0.pos, n0.pos, n1.pos)
+        if len(s0.left) > 0:
+            add('0-p:0-lp:0+p', s0.pos, s0.left[0].pos, n0.pos)
+        if len(s0.right) > 0:
+            add('0-p:0-rp:1p', s0.pos, s0.right[-1].pos, n0.pos)
+        if len(n0.left) > 0:
+            add('0-p:0+p:0+lp', s0.pos, n0.pos, n0.left[0].pos)
+        add('0+last', str(i+1 == len(nodes)-self.rw-1))
+        add('0-last', str(i == len(nodes)-self.rw-1))
+        # add('0-dis', str(len(nodes) - i))
 
         return features
 
@@ -237,44 +262,15 @@ class Parser:
             nodes.append(node)
 
         return nodes
-
-    def _init_feature_map(self):
-        # -2:pos:NN => 0
-        feat_names = ['pos', 'lex', 'chLlex', 'chRlex', 'chLpos', 'chRpos', 'pl']
-        self.feature_map = {}
-
-        cnt = 0
-        for windname in self.window_names:
-            for featname in feat_names:
-                if featname.endswith('pos'):
-                    for pos in self.pos_set:
-                        key = windname + ':' + featname + ':' + pos
-                        self.feature_map[key] = cnt
-                        cnt += 1
-                elif featname.endswith('lex'):
-                    for lex in self.token_set:
-                        key = windname + ':' + featname + ':' + lex
-                        self.feature_map[key] = cnt
-                        cnt += 1
-                elif featname.endswith('pl'):
-                    for pos in self.pos_set:
-                        for lex in self.token_set:
-                            key = windname + ':' + featname + ':' + pos + '-' + lex
-                            self.feature_map[key] = cnt
-                            cnt += 1
-
-        print 'has', len(self.feature_map), 'features'
         
 
 def eval(goldpath, predictpath):
     # Evaluate
     os.system('java -jar ../conll08-eval.jar ../data/%s ../result/%s' % (goldpath, predictpath))
 
-useModel = True
-if sys.argv[1] == '-1':
-    useModel = False
+niter = int(sys.argv[1])
 
-parser = Parser(1, 2, useModel=useModel)
+parser = Parser(1, 3, niter)
 # Train
 parser.train(reader.trn_reader)
 # Predict
