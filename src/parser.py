@@ -150,7 +150,7 @@ class Parser:
         if output:
             outfile.close()
 
-        print 'total feature %d, ignored %d, pctg %.2f%' % (self.total_feature, self.ignored_feature, self.ignored_feature / self.total_feature * 100)
+        print 'total feature %d, ignored %d, pctg %.2f%%' % (self.total_feature, self.ignored_feature, self.ignored_feature / self.total_feature * 100)
         print 'predicted (%.2f secs)' % (time.clock() - start)
 
     def _get_features(self, nodes, i):
@@ -169,6 +169,7 @@ class Parser:
             position = self.window_names[idx]
             add_feature(position, 'pos', node.pos)
             add_feature(position, 'lex', node.token)
+            add_feature(position, 'pl', node.pos + '-' + node.token)
             if len(node.left) > 0:
                 add_feature(position, 'chLlex', node.left[0].token)
                 add_feature(position, 'chLpos', node.left[0].pos)
@@ -239,7 +240,7 @@ class Parser:
 
     def _init_feature_map(self):
         # -2:pos:NN => 0
-        feat_names = ['pos', 'lex', 'chLlex', 'chRlex', 'chLpos', 'chRpos']
+        feat_names = ['pos', 'lex', 'chLlex', 'chRlex', 'chLpos', 'chRpos', 'pl']
         self.feature_map = {}
 
         cnt = 0
@@ -255,6 +256,12 @@ class Parser:
                         key = windname + ':' + featname + ':' + lex
                         self.feature_map[key] = cnt
                         cnt += 1
+                elif featname.endswith('pl'):
+                    for pos in self.pos_set:
+                        for lex in self.token_set:
+                            key = windname + ':' + featname + ':' + pos + '-' + lex
+                            self.feature_map[key] = cnt
+                            cnt += 1
 
         print 'has', len(self.feature_map), 'features'
         
@@ -267,7 +274,7 @@ useModel = True
 if sys.argv[1] == '-1':
     useModel = False
 
-parser = Parser(2, 4, useModel=useModel)
+parser = Parser(1, 2, useModel=useModel)
 # Train
 parser.train(reader.trn_reader)
 # Predict
