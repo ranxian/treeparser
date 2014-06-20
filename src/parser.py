@@ -95,15 +95,6 @@ class Parser:
 
                     # Perform action
                     self._construct(stack, queue, action)
-                    # for node in stack:
-                    #     node.printSelf(logfile, -1)
-                    # logfile.write('\n')
-                    # print sent
-                    # for node in queue:
-                    #     node.printSelf(logfile, -1)
-                    # logfile.write('\n\n\n')
-
-                    # assert(len(queue) > 0)
 
                     ntotal += 1
                     if pred_action == action:
@@ -142,10 +133,11 @@ class Parser:
                         else:
                             action = ACT_LEFT
 
+                if len(stack) == 1 and len(queue) == 1:
+                    action = ACT_LEFT
+
                 # Perform action
                 self._construct(stack, queue, action)
-
-                assert(len(queue) > 0)
             if output:
                 for node in nodes:
                     outfile.write('%d\t%s\t%s\t%s\t%s\t_\t_\t_\t%d\tX\t_\n' % (node.idx, node.token, node.token, 
@@ -167,6 +159,7 @@ class Parser:
         n0 = queue[0]
         n1 = queue[1] if len(queue) > 1 else self.srnodes[0]
         n2 = queue[2] if len(queue) > 2 else self.srnodes[1]
+        n3 = queue[3] if len(queue) > 3 else self.srnodes[2]
 
         add('bias')
         # feat_names = ['pos', 'lex', 'chLlex', 'chRlex', 'chLpos', 'chRpos', 'pl', '2pl']
@@ -183,6 +176,9 @@ class Parser:
         add('2:wp', n2.token, n2.pos)
         add('2:w', n2.token)
         add('2:p', n2.pos)
+        add('3:wp', n3.token, n3.pos)
+        add('3:w', n3.token)
+        add('3:p', n3.pos)
         # Bigram-like feature
         # S0wpN0wp; S0wpN0w; S0wN0wp; S0wpN0p; S0pN0wp; S0wN0w; S0pN0p
         add('0-wp+0+:wp', s0.token, s0.pos, n0.token, n0.pos)
@@ -202,7 +198,6 @@ class Parser:
             add('0-p:0-rp:1p', s0.pos, s0.right[-1].pos, n0.pos)
         if len(n0.left) > 0:
             add('0-p:0+p:0+lp', s0.pos, n0.pos, n0.left[0].pos)
-
 
         if len(queue) == 1 and len(stack) > 1:
             add('not-yet')
@@ -277,7 +272,7 @@ def eval(goldpath, predictpath):
 
 niter = int(sys.argv[1])
 
-parser = Parser(1, 3, niter)
+parser = Parser(1, 4, niter)
 # Train
 parser.train(reader.trn_reader)
 # Predict
