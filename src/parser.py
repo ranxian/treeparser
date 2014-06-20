@@ -154,16 +154,16 @@ class Parser:
 
         print 'predicted (%.2f secs)' % (time.clock() - start)
 
-    def _get_features(self, nodes, i):
+    def _get_features(self, stack, queue):
         def add(name, *args):
             features['_'.join((name, ) + tuple(args))] = 1
 
         features = defaultdict(int)
 
-        s0 = nodes[i]
-        n0 = nodes[i+1]
-        n1 = nodes[i+2]
-        n2 = nodes[i+3]
+        s0 = stack[-1]
+        n0 = queue[0]
+        n1 = queue[1]
+        n2 = queue[2]
 
         add('bias')
         # feat_names = ['pos', 'lex', 'chLlex', 'chRlex', 'chLpos', 'chRpos', 'pl', '2pl']
@@ -199,9 +199,9 @@ class Parser:
             add('0-p:0-rp:1p', s0.pos, s0.right[-1].pos, n0.pos)
         if len(n0.left) > 0:
             add('0-p:0+p:0+lp', s0.pos, n0.pos, n0.left[0].pos)
-        add('0+last', str(i+1 == len(nodes)-self.rw-1))
-        add('0-last', str(i == len(nodes)-self.rw-1))
-        # add('0-dis', str(len(nodes) - i))
+
+        if len(queue) == 1+self.rw:
+            add('last')   
 
         return features
 
