@@ -22,7 +22,7 @@ class Perceptron:
             weights = self.weights[feature]
             for tag, weight in weights.items():
                 scores[tag] += value * weight
-        return max(self.tag_set, key=lambda tag: scores[tag])
+        return max(self.tag_set, key=lambda tag: scores[tag]), scores
 
     def update(self, tag, pred, features):
         def update_feature(tag, feature, value):

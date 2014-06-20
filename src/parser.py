@@ -26,14 +26,14 @@ class Node:
         self.pos = pos
         self.pidx = None
 
-    def printSelf(self, outfile, pidx, isConll=False):
+    def printSelf(self, outfile, pidx):
         for node in self.left:
-            node.printSelf(outfile, self.idx, isConll)
+            node.printSelf(outfile, self.idx)
         
         outfile.write('%5d%20s%20s%20s\n' % (self.idx, self.token, self.pos, str(pidx) if pidx >= 0 else '_'))    
         
         for node in self.right:
-            node.printSelf(outfile, self.idx, isConll)
+            node.printSelf(outfile, self.idx)
 
 class Parser:
     def __init__(self, lw, rw, iteration):
@@ -80,37 +80,35 @@ class Parser:
             ntotal = 0
             ncorrect = 0
             for sent in sents:
-                # Build a nodes array
-                nodes = self._init_nodes(sent)
                 # Train
-                no_construction = True
-                i = self.lw
+                stack = [Node(0, 'ROOT_TOKEN', 'ROOT_POS')]
+                queue = [Node(word[IDX_IDX], word[IDX_TOKEN], word[IDX_POS]) for word in sent] 
 
-                while len(nodes) > (1+self.rw+self.lw):
-                    if i == len(nodes)-self.rw:
-                        if no_construction:
-                            break
-                        no_construction = True
-                        i = self.lw
-                    else:
-                        # Gain feature
-                        features = self._get_features(nodes, i)
-                        # Pred action
-                        action = self._decide_action(sent, nodes, i)
-                        pred_action = self.perceptron.predict(features)
-                        self.perceptron.update(action, pred_action, features)
+                while len(stack) >= 1 or len(queue) > 1:
+                    # Extrack feature
+                    features = self._get_features(stack, queue)
 
-                        ntotal += 1
-                        if pred_action == action:
-                            ncorrect += 1
+                    action = self._decide_action(sent, stack, queue)
+                    pred_action, scores = self.perceptron.predict(features)
 
-                        # Apply action
-                        i = self._construct(nodes, i, action)
-                        
-                        if action == ACT_LEFT or action == ACT_RIGHT:
-                            no_construction = False
-                        if action < 0:
-                            raise BaseException, 'Not a valid action'
+                    self.perceptron.update(action, pred_action, features)
+
+                    # Perform action
+                    self._construct(stack, queue, action)
+                    # for node in stack:
+                    #     node.printSelf(logfile, -1)
+                    # logfile.write('\n')
+                    # print sent
+                    # for node in queue:
+                    #     node.printSelf(logfile, -1)
+                    # logfile.write('\n\n\n')
+
+                    # assert(len(queue) > 0)
+
+                    ntotal += 1
+                    if pred_action == action:
+                        ncorrect += 1
+
             print 'iter: #%d, precision: %.2f%% (%d/%d)' % (it, ncorrect/ntotal*100, ncorrect, ntotal)
         self.perceptron.average_weights
         elapsed = time.clock() - start
@@ -124,27 +122,32 @@ class Parser:
             outfile = open(self.result_path, 'w')
 
         for sent in sents:
-            nodes = self._init_nodes(sent)
-            nodes2 = [node for node in nodes]
-            no_construction = True
-            i = self.lw
-            while len(nodes) > (1+self.lw+self.rw):
-                if i == len(nodes)-self.rw:
-                    if no_construction:
-                        break
-                    no_construction = True
-                    i = self.lw
-                else:
-                    # Extract features
-                    features = self._get_features(nodes, i)
-                    action = self.perceptron.predict(features)
-                    # Apply action
-                    i = self._construct(nodes, i, action)
-                    
-                    if action == ACT_LEFT or action == ACT_RIGHT:
-                        no_construction = False
+            stack = [Node(0, 'ROOT_TOKEN', 'ROOT_POS')]
+            queue = [Node(word[IDX_IDX], word[IDX_TOKEN], word[IDX_POS]) for word in sent]
+            nodes = [node for node in queue]
+
+            while len(stack) >= 1 or len(queue) > 1:
+                # Extract feature
+                features = self._get_features(stack, queue)
+
+                action, scores = self.perceptron.predict(features)
+
+                if len(stack) == 1 and len(queue) > 1:
+                    action = ACT_SHIFT
+
+                if len(stack) > 1 and len(queue) == 1:
+                    if action == ACT_SHIFT:
+                        if scores[ACT_RIGHT] > scores[ACT_LEFT]:
+                            action = ACT_RIGHT
+                        else:
+                            action = ACT_LEFT
+
+                # Perform action
+                self._construct(stack, queue, action)
+
+                assert(len(queue) > 0)
             if output:
-                for node in nodes2[self.lw:-self.rw]:
+                for node in nodes:
                     outfile.write('%d\t%s\t%s\t%s\t%s\t_\t_\t_\t%d\tX\t_\n' % (node.idx, node.token, node.token, 
                                                                        node.pos, node.pos, node.pidx if node.pidx != None else 0))
                 outfile.write('\n')
@@ -162,8 +165,8 @@ class Parser:
 
         s0 = stack[-1]
         n0 = queue[0]
-        n1 = queue[1]
-        n2 = queue[2]
+        n1 = queue[1] if len(queue) > 1 else self.srnodes[0]
+        n2 = queue[2] if len(queue) > 2 else self.srnodes[1]
 
         add('bias')
         # feat_names = ['pos', 'lex', 'chLlex', 'chRlex', 'chLpos', 'chRpos', 'pl', '2pl']
@@ -200,56 +203,60 @@ class Parser:
         if len(n0.left) > 0:
             add('0-p:0+p:0+lp', s0.pos, n0.pos, n0.left[0].pos)
 
-        if len(queue) == 1+self.rw:
-            add('last')   
+
+        if len(queue) == 1 and len(stack) > 1:
+            add('not-yet')
 
         return features
 
-    def _decide_action(self, sent, nodes, i):
-        nodei = nodes[i]
-        nodej = nodes[i+1]
+    def _decide_action(self, sent, stack, queue):
+        nodei = stack[-1]
+        nodej = queue[0]
         action = ACT_SHIFT
-        # See if i->j (Right)
-        if nodej.idx > 0 and sent[nodei.idx-1][IDX_HEAD] == nodej.idx:
+
+        if nodei.idx == 0 and len(queue) > 1:
+            return ACT_SHIFT
+
+        if nodei.idx == 0 and len(queue) == 1:
+            return ACT_LEFT
+
+        # See if i->j (Left)
+        if sent[nodei.idx-1][IDX_HEAD] == nodej.idx:
             # Check no other node is nodei's child
             complete = True
-            for node in nodes[self.lw:-self.rw]:
+            for node in stack + queue:
                 if sent[node.idx-1][IDX_HEAD] == nodei.idx:
                     complete = False
                     break
             if complete:
-                action = ACT_RIGHT
-        elif nodei.idx > 0 and sent[nodej.idx-1][IDX_HEAD] == nodei.idx:
+                action = ACT_LEFT
+        elif sent[nodej.idx-1][IDX_HEAD] == nodei.idx:
             # See if j->i
             # Check no other node is nodej's child
             complete = True
-            for node in nodes[self.lw:-self.rw]:
+            for node in stack[1:] + queue:
                 if sent[node.idx-1][IDX_HEAD] == nodej.idx:
                     complete = False
                     break
             if complete:
-                action = ACT_LEFT
+                action = ACT_RIGHT
 
-        # print 'action is %d' % action
         return action
 
-    def _construct(self, nodes, i, action):
-        nodei = nodes[i]
-        nodej = nodes[i+1]
+    def _construct(self, stack, queue, action):
+        logfile.write('action is %d \n' % action)
         if action == ACT_SHIFT:
-            i += 1
-        elif action == ACT_LEFT: # j->i
-            nodes.remove(nodej)
-            nodei.right.append(nodej)
-            nodej.pidx = nodei.idx
-        elif action == ACT_RIGHT: # i->j
-            nodes.remove(nodei)
-            nodej.left.append(nodei)
-            nodei.pidx = nodej.idx
+            stack.append(queue.pop(0))
+        elif action == ACT_LEFT: # i->j
+            queue[0].left.append(stack[-1])
+            stack[-1].pidx = queue[0].idx
+            stack.pop(-1)
+        elif action == ACT_RIGHT: # j->i
+            stack[-1].right.append(queue[0])
+            queue[0].pidx = stack[-1].idx
+            queue[0] = stack.pop(-1)
         else:
             raise BaseException, 'Not a valid action'
-
-        return i
 
     def _init_nodes(self, sent):
         nodes = []
