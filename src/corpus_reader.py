@@ -19,7 +19,10 @@ class CorpusReader:
                 sent = []
             else:
                 sp = line.split('\t')
-                sp2 = [int(sp[0]), sp[1], sp[3], int(sp[8])]
+                sp2 = [int(sp[0]), sp[1], sp[3]]
+
+                if len(sp) >= 9:
+                    sp2.append(int(sp[8]))
                 self.token_set.append(sp[1])
                 self.pos_set.append(sp[3])
                 sent.append(sp2)
@@ -34,11 +37,11 @@ class CorpusReader:
 
 dev_data_path = '../data/dev.conll08'
 trn_data_path = '../data/trn.conll08'
-# tst_data_path = '../data/tst.conll08'
+tst_data_path = '../data/test.conll08'
 
 dev_reader = CorpusReader(dev_data_path)
 trn_reader = CorpusReader(trn_data_path)
-# tst_sents = CorpusReader(tst_data_path)
+tst_reader = CorpusReader(tst_data_path)
 
 if __name__ == '__main__':
     reader = CorpusReader('../data/dev.conll08')

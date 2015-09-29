@@ -1,0 +1,13 @@
+Hello TA.
+
+I build a dependency tree parser. 
+
+The final result is in the result directory named as result.conll08. 
+
+The Report is in the report directory named as report.pdf.
+
+Codes are in the directory named data.
+
+Cheers!
+
+Ran Xian.
